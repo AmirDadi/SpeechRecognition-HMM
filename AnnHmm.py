@@ -21,6 +21,7 @@ class ANNHMM(hmm.GMMHMM):
                             params=params, init_params=init_params)
         self.Ann_model = ann_model
         self.is_gmm = True
+        self.st = []
 
     def _initialize_sufficient_statistics(self):
         stats = super(ANNHMM, self)._initialize_sufficient_statistics()
@@ -43,43 +44,39 @@ class ANNHMM(hmm.GMMHMM):
             x = super(ANNHMM, self)._compute_log_likelihood(X)
             return x
         else:
-            # for sample in X:
+            y = super(ANNHMM, self)._compute_log_likelihood(X)
             x = self.Ann_model(
                 Variable(torch.from_numpy(X))
-            ).data.numpy() - np.log(self.startprob_)
-            # print(x)
+            ).data.numpy()
+            # print(np.shape(self.st))
+            x = x[:,:-1]
+            # print(np.shape(x))
+            x = np.log(x) - np.log(self.st)
             return x.astype(np.float64)
-            # x = np.array(likelihoods, dtype='float32')
-            # return x
 
     def fit(self, X, lengths=None):
         self.is_gmm = True
         super(ANNHMM, self).fit(X, lengths)
 
-        print('gmm done')
-        print(self.monitor_)
+
         for i, j in ANNHMM.iter_from_X_lengths(X, lengths):
             framelogprob = self._compute_log_likelihood(X[i:j])
             self.Ann_model.train(X[i:j],
                                  np.argmax(framelogprob, axis=1))
-        print('first train done')
 
+        self.st = self.startprob_
         self.is_gmm = False
-        for i in range(20):
+        for i in range(10):
             print(i)
             super(ANNHMM, self).fit(X, lengths)
-            print(self.monitor_)
 
-        print(self.monitor_)
 
     def _do_mstep(self, stats):
         if self.is_gmm:
             super(ANNHMM, self)._do_mstep(stats)
         else:
-            # for label, sample in zip(stats['data'], stats['label']):
-            print('do m step')
-            print(self.Ann_model.train(np.concatenate(stats['data']),
-                                 np.concatenate(stats['labels'])))
+            self.Ann_model.train(np.concatenate(stats['data']),
+                                 np.concatenate(stats['labels']))
 
     @staticmethod
     def iter_from_X_lengths(X, lengths):
